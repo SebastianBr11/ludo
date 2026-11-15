@@ -131,6 +131,23 @@ def main():
         check('not current before anything is recorded',
               E.firmware_is_current(entry, extra_data_dir=data), False)
 
+        # Firmware Ludo never installed (Eden's own installer, or by hand):
+        # no receipt, but Eden's log names the version it loaded. A match with
+        # the server archive's version is current -- not a 340 MB re-download.
+        (data / 'log').mkdir(exist_ok=True)
+        eden_log = data / 'log/eden_log.txt'
+        eden_log.write_text('[ 0.1] Core <Info> Installed firmware: 17.0.1\n')
+        check('user-installed firmware of the same version is current',
+              E.firmware_is_current(entry, extra_data_dir=data), True)
+        eden_log.write_text('[ 0.1] Core <Info> Installed firmware: 16.0.3\n')
+        check('user-installed firmware of another version is not current',
+              E.firmware_is_current(entry, extra_data_dir=data), False)
+        eden_log.write_text('[ 0.1] Core <Info> Installed firmware: 17.0.1\n')
+        check('an unversioned server archive is not current without a receipt',
+              E.firmware_is_current({**entry, 'file_name': 'firmware.zip'},
+                                    extra_data_dir=data), False)
+        eden_log.unlink()
+
         E.write_firmware_marker(entry['file_name'], entry['md5_hash'], installed)
         check('current once recorded',
               E.firmware_is_current(entry, extra_data_dir=data), True)

@@ -476,8 +476,19 @@ def firmware_is_current(entry, extra_data_dir=None):
     current for an emulator whose registered/ has since been emptied.
     """
     marker = read_firmware_marker()
+    if not marker:
+        # Firmware Ludo never installed: put there through Eden or by hand
+        # (the same case as user-placed keys, rommapp/ludo#22). Without a
+        # receipt there is no md5 to compare, but Eden reports the version it
+        # loaded, and a match with the server archive's version is the answer.
+        # Otherwise every check offered a ~340 MB re-download of firmware
+        # already on disk.
+        server = firmware_version_from_name(entry.get('file_name'))
+        status = firmware_status(extra_data_dir)
+        return bool(server and status and status['count']
+                    and detected_firmware_version(extra_data_dir) == server)
     expected = (entry.get('md5_hash') or '').lower()
-    if not marker or not expected or marker.get('md5') != expected:
+    if not expected or marker.get('md5') != expected:
         return False
     # Deliberately NOT gated on prod.keys. Missing keys make the firmware
     # unusable, but they are an 11 KB fetch of their own -- see
