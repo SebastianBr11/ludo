@@ -23,7 +23,6 @@ from urllib.parse import urljoin, quote, urlparse
 import socket
 import configparser
 import html
-import webbrowser
 import base64
 import datetime
 import psutil
@@ -1776,7 +1775,6 @@ class SettingsManager:
         try:
             from cryptography.fernet import Fernet
             import hashlib
-            import getpass
 
             def _fernet(material):
                 key = hashlib.sha256(material.encode()).digest()
@@ -1789,7 +1787,7 @@ class SettingsManager:
             # getuser() reads $USER/$LOGNAME, which Decky Loader leaves as
             # 'root' for plugins it runs as the user. Values written under that
             # name still decrypt.
-            env_user = getpass.getuser()
+            env_user = self._env_user()
             if env_user != user:
                 self._legacy_ciphers.append(_fernet(f"{env_user}-{self._machine_id()}"))
         except ImportError as e:
@@ -1803,8 +1801,18 @@ class SettingsManager:
             import pwd
             return pwd.getpwuid(os.getuid()).pw_name
         except Exception:
-            import getpass
-            return getpass.getuser()
+            return SettingsManager._env_user()
+
+    @staticmethod
+    def _env_user():
+        """getpass.getuser() without importing getpass: Decky Loader's frozen
+        Python lacks it and falls back to the system's stdlib, which on a newer
+        Python (Fedora 45's 3.15) doesn't even load."""
+        for name in ('LOGNAME', 'USER', 'LNAME', 'USERNAME'):
+            if os.environ.get(name):
+                return os.environ[name]
+        import pwd
+        return pwd.getpwuid(os.getuid()).pw_name
 
     def _machine_id(self):
         """Stable per-installation identifier, independent of hostname."""
