@@ -9088,6 +9088,15 @@ class RetroArchInterface:
             'neo geo': ['fbneo', 'mame', 'fbalpha'],
             'neo geo cd': ['neocd', 'fbneo'],
             'neo geo pocket': ['beetle_ngp', 'mednafen_ngp'],
+            # RomM's "MSX2", "TurboGrafx-16/PC Engine", "Turbografx-16/PC
+            # Engine CD" (rommapp/ludo#80). The PCE cores run CD games too.
+            'msx': ['bluemsx', 'fmsx'],
+            'pc engine': ['beetle_pce_fast', 'mednafen_pce_fast', 'beetle_pce', 'mednafen_pce'],
+            'turbografx': ['beetle_pce_fast', 'mednafen_pce_fast', 'beetle_pce', 'mednafen_pce'],
+            # No libretro PS3 core. Listed so the longer keyword wins and
+            # "PlayStation 3" no longer falls through to the PS1 cores.
+            'playstation 3': [],
+            'ps3': [],
     }
 
     def standalone_emulator_status(self, platform_name, platform_slug=None):
@@ -20089,7 +20098,7 @@ class SteamShortcutManager:
             return None
         return userdata / 'shortcuts.vdf'
 
-    def _build_launch_command(self, rom_path, platform_name):
+    def _build_launch_command(self, rom_path, platform_name, platform_slug=None):
         """Build the exe and launch options for a ROM.
 
         Returns (exe, launch_options) tuple, or (None, None) if no core found.
@@ -20119,7 +20128,8 @@ class SteamShortcutManager:
             return None, None
 
         # Find the right core
-        core_name, core_path = self.retroarch.suggest_core_for_platform(platform_name)
+        core_name, core_path = self.retroarch.suggest_core_for_platform(
+            platform_name, platform_slug, platform_slug=platform_slug)
         if not core_name:
             return None, None
 
@@ -20146,7 +20156,7 @@ class SteamShortcutManager:
             platform_slug: Optional platform slug for cover art organization
             cover_url: Optional cover URL from RomM API (path_cover_l or path_cover_s)
         """
-        exe, launch_options = self._build_launch_command(rom_path, platform_name)
+        exe, launch_options = self._build_launch_command(rom_path, platform_name, platform_slug)
 
         # If no core found, create placeholder shortcut
         if not exe:
