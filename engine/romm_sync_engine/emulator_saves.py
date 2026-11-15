@@ -397,6 +397,39 @@ def write_keys_marker(file_name, md5, files=None):
         log.debug("could not write keys marker: %s", e)
 
 
+def _keys_receipt(entry, marker):
+    """(receipt or None, key file names) for a server key `entry`."""
+    receipt = marker.get('entries', {}).get(entry.get('file_name'))
+    if receipt is None and marker.get('file_name') == entry.get('file_name'):
+        receipt = {**marker, 'files': [key_file_name(marker['file_name']) or 'prod.keys']}
+    names = (receipt or {}).get('files') or [key_file_name(entry.get('file_name')) or 'prod.keys']
+    return receipt, names
+
+
+def keys_completeness(entries, extra_data_dir=None):
+    """How the server's key `entries` compare with this disk.
+
+    Returns {'missing': sorted key file names an entry provides that no Eden
+    data dir has, 'outdated': True when every file is here but some entry
+    changed on the server}. prod.keys alone on disk is not "keys installed"
+    when the server also offers title.keys that never landed.
+    """
+    marker = read_keys_marker()
+    dirs = eden_data_dirs(extra_data_dir)
+    missing, outdated = set(), False
+    for entry in entries or []:
+        if keys_are_current(entry, extra_data_dir):
+            continue
+        _, names = _keys_receipt(entry, marker)
+        absent = [n for n in names
+                  if not any((d / 'keys' / n).is_file() for d in dirs)]
+        if absent:
+            missing.update(absent)
+        else:
+            outdated = True
+    return {'missing': sorted(missing), 'outdated': outdated}
+
+
 def keys_are_current(entry, extra_data_dir=None):
     """True when the server's key `entry` is the one already installed.
 
@@ -405,10 +438,7 @@ def keys_are_current(entry, extra_data_dir=None):
     separately rather than folded into the firmware marker.
     """
     marker = read_keys_marker()
-    receipt = marker.get('entries', {}).get(entry.get('file_name'))
-    if receipt is None and marker.get('file_name') == entry.get('file_name'):
-        receipt = {**marker, 'files': [key_file_name(marker['file_name']) or 'prod.keys']}
-    names = (receipt or {}).get('files') or [key_file_name(entry.get('file_name')) or 'prod.keys']
+    receipt, names = _keys_receipt(entry, marker)
     dirs = eden_data_dirs(extra_data_dir)
     if not all(any((d / 'keys' / name).is_file() for d in dirs) for name in names):
         return False

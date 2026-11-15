@@ -15511,11 +15511,15 @@ class AutoSyncManager:
         # the server, which sync_switch_firmware installs first.
         keys = emulator_saves.keys_status()
         keys_ok = keys is not None
+        # Per-file state for the panel's summary line: prod.keys on disk is
+        # not "keys installed" while a title.keys the server offers is absent.
+        keys_state = {'missing': [], 'outdated': False}
         try:
             key_entries = bios.find_keys_entries('switch')
             keys_ok = keys_ok or any(
                 emulator_saves.key_file_name(e.get('file_name')) != 'title.keys'
                 for e in key_entries)
+            keys_state = emulator_saves.keys_completeness(key_entries)
         except Exception:
             pass
         # Version labels, parsed from filenames. The installed one comes from
@@ -15539,6 +15543,8 @@ class AutoSyncManager:
                     'version': server_version,
                     'installed_version': installed_version,
                     'keys_installed': keys is not None,
+                    'keys_missing': keys_state['missing'],
+                    'keys_outdated': keys_state['outdated'],
                     'master_key': (keys or {}).get('master_key')}
         return {'available': True,
                 'file_name': entry.get('file_name'),
@@ -15551,6 +15557,8 @@ class AutoSyncManager:
                 # above, which also counts a keys entry sitting on the server
                 # that nothing has installed yet.
                 'keys_installed': keys is not None,
+                'keys_missing': keys_state['missing'],
+                'keys_outdated': keys_state['outdated'],
                 # Shown, not enforced: which firmware needs which generation
                 # is a table that goes stale with every Nintendo release, and
                 # guessing it wrong would block an install that would work.

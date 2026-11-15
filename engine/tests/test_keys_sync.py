@@ -71,6 +71,7 @@ def main():
         assert downloads == ['prod.keys', 'title.keys'], downloads
         assert (data / 'keys/title.keys').read_bytes() == TITLE_KEY_TEXT
         assert all(E.keys_are_current(e) for e in entries)
+        assert E.keys_completeness(entries) == {'missing': [], 'outdated': False}
         assert set(E.read_keys_marker()['files']) == {'prod.keys', 'title.keys'}
         downloads.clear()
         assert manager._sync_switch_keys(bios)['status'] == 'up-to-date'
@@ -78,11 +79,15 @@ def main():
         for entry in (title, prod):
             (data / 'keys' / entry['file_name']).unlink()
             assert not E.keys_are_current(entry)
+            # The panel's summary line names the absent file (prod.keys alone
+            # is not "Keys installed" while title.keys is offered and absent).
+            assert E.keys_completeness(entries) == {'missing': [entry['file_name']], 'outdated': False}
             assert E.keys_are_current(prod if entry is title else title)
             downloads.clear()
             assert manager._sync_switch_keys(bios)['installed'] == 1
             assert downloads == [entry['file_name']], downloads
         prod['md5_hash'] = 'changed'
+        assert E.keys_completeness(entries) == {'missing': [], 'outdated': True}
         downloads.clear()
         assert manager._sync_switch_keys(bios)['installed'] == 1
         assert downloads == ['prod.keys']

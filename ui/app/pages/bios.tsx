@@ -137,6 +137,16 @@ export function BiosPage() {
 //
 // `seed` paints immediately when the caller already has the row; without one
 // (the actions-menu path) the panel fetches the inventory itself.
+// The keys half of the firmware summary line. prod.keys on disk alone is not
+// "Keys installed" while the server offers a title.keys that never landed:
+// the file list above shows it with a cross, and this line must agree.
+function keysNote(fw: any): string {
+  if (!fw?.keys_installed) return '';
+  const missing: string[] = fw.keys_missing || [];
+  if (missing.length) return ` · ${missing.join(', ')} missing`;
+  return fw.keys_outdated ? ' · Keys update available' : ' · Keys installed';
+}
+
 export function BiosDetailModal({ slug, platformName, seed, onChanged, closeModal }: {
   slug: string; platformName?: string; seed?: any;
   onChanged?: () => void; closeModal?: () => void;
@@ -323,7 +333,7 @@ export function BiosDetailModal({ slug, platformName, seed, onChanged, closeModa
                       the install prompt, where it is deciding something; here
                       the only question is whether the set is complete, and
                       "keys installed" is the whole answer. */}
-                  {fwLine}{fw?.keys_installed ? ' · Keys installed' : ''}
+                  {fwLine}{keysNote(fw)}
                 </div>
                 {/* Updates & DLC placement. Two modes, and the difference is
                     not cosmetic: the folder keeps one file per add-on where
