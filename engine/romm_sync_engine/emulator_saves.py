@@ -360,9 +360,13 @@ def read_keys_marker():
         return {}
 
 
+def _is_archive_name(file_name):
+    return Path(file_name or '').name.lower().endswith(('.zip', '.7z', '.rar'))
+
+
 def key_file_name(file_name):
     name = Path(file_name or '').name.lower()
-    if name.endswith(('.zip', '.7z', '.rar')):
+    if _is_archive_name(name):
         return None
     return next((k for k in _KEY_FILES
                  if name == k or name.startswith(k + '.')), None)
@@ -401,7 +405,8 @@ def _keys_receipt(entry, marker):
     """(receipt or None, key file names) for a server key `entry`."""
     receipt = marker.get('entries', {}).get(entry.get('file_name'))
     if receipt is None and marker.get('file_name') == entry.get('file_name'):
-        receipt = {**marker, 'files': [key_file_name(marker['file_name']) or 'prod.keys']}
+        receipt = {**marker, 'files': [key_file_name(marker['file_name']) or 'prod.keys'],
+                   'legacy': True}
     names = (receipt or {}).get('files') or [key_file_name(entry.get('file_name')) or 'prod.keys']
     return receipt, names
 
@@ -441,6 +446,12 @@ def keys_are_current(entry, extra_data_dir=None):
     receipt, names = _keys_receipt(entry, marker)
     dirs = eden_data_dirs(extra_data_dir)
     if not all(any((d / 'keys' / name).is_file() for d in dirs) for name in names):
+        return False
+    if (receipt or {}).get('legacy') and _is_archive_name(entry.get('file_name')):
+        # Receipts from before per-file tracking named the archive but not
+        # what it held, so a title.keys it carried can be gone unnoticed.
+        # Not current: the next key sync re-fetches it (~7 KB) once and
+        # records the full file list.
         return False
     expected = (entry.get('md5_hash') or '').lower()
     if not expected:

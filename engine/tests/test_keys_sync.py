@@ -215,8 +215,57 @@ def main():
             assert result['status'] == 'failed' and result['keys'] == 1, result
             assert (data / 'keys/title.keys').read_bytes() == TITLE_KEY_TEXT
 
+    legacy_archive_receipt()
     print('all independent Switch key sync checks passed')
     return 0
+
+
+def legacy_archive_receipt():
+    """keys.json written before per-file receipts, for an archive of both keys.
+
+    That receipt names the archive only, so a title.keys it delivered and that
+    has since gone must not read as "Keys installed": the archive is fetched
+    once more and the receipt gains its real file list.
+    """
+    with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {'HOME': tmp}):
+        root = Path(tmp)
+        keys = root / '.local/share/eden/keys'
+        keys.mkdir(parents=True)
+        (keys / 'prod.keys').write_bytes(KEY_TEXT)
+        archive_path = root / 'ProdKeys.NET-v22.5.0.zip'
+        with zipfile.ZipFile(archive_path, 'w') as archive:
+            archive.writestr('prod.keys', KEY_TEXT)
+            archive.writestr('title.keys', TITLE_KEY_TEXT)
+        entry = {'id': 7, 'file_name': archive_path.name, 'md5_hash': 'ee',
+                 'updated_at': '2026-03', 'file_size_bytes': 300}
+        E._keys_marker_path().parent.mkdir(parents=True, exist_ok=True)
+        E._keys_marker_path().write_text(json.dumps(
+            {'file_name': entry['file_name'], 'md5': 'ee'}))
+
+        assert not E.keys_are_current(entry)
+        assert E.keys_completeness([entry]) == {'missing': [], 'outdated': True}
+
+        bios = BiosManager.__new__(BiosManager)
+        bios._fetch_platforms = lambda: [{'slug': 'switch', 'firmware': [entry]}]
+        downloads = []
+        bios.download_firmware_entry = lambda e, *a, **k: downloads.append(1) or archive_path
+        manager = AutoSyncManager.__new__(AutoSyncManager)
+        manager.retroarch = SimpleNamespace(bios_manager=bios)
+        manager.log = lambda text: None
+        manager.forget_title_ids = lambda: None
+
+        assert manager._sync_switch_keys(bios)['status'] == 'installed'
+        assert (keys / 'title.keys').read_bytes() == TITLE_KEY_TEXT
+        receipt = E.read_keys_marker()['entries'][entry['file_name']]
+        assert sorted(receipt['files']) == ['prod.keys', 'title.keys'], receipt
+        assert E.keys_are_current(entry)
+        assert manager._sync_switch_keys(bios)['status'] == 'up-to-date'
+        assert len(downloads) == 1, downloads
+
+        # And from now on a missing title.keys is reported by name.
+        (keys / 'title.keys').unlink()
+        assert E.keys_completeness([entry]) == {'missing': ['title.keys'],
+                                                'outdated': False}
 
 
 if __name__ == '__main__':
