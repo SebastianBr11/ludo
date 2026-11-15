@@ -7944,9 +7944,7 @@ class RetroArchInterface:
             print(f"🎮 Using custom RetroArch path: {custom_path}")
 
             # ALSO CHECK FOR CORES RELATIVE TO CUSTOM PATH
-            custom_config_dir = Path(custom_path).parent
-            if (custom_config_dir / 'config/retroarch').exists():
-                custom_config_dir = custom_config_dir / 'config/retroarch'
+            custom_config_dir = self._custom_install_dir(custom_path)
             custom_cores_dir = custom_config_dir / 'cores'
             if custom_cores_dir.exists():
                 self.cores_dir = custom_cores_dir
@@ -10370,14 +10368,30 @@ class RetroArchInterface:
                     and str(d).startswith(str(Path.home() / 'retrodeck')))]
         return mine + [d for d in live if d not in mine]
 
+    @staticmethod
+    def _custom_install_dir(custom_path):
+        """The folder an emulator path set in Ludo points at: the binary's own
+        folder, or its config/retroarch subfolder when it has one.
+
+        A Flatpak launcher (…/flatpak/exports/bin/<app id>, user or system) is a
+        stub script, not the install: its folder is outside the app's sandbox,
+        so RetroArch couldn't read the per-launch overlay written there. It maps
+        to the app's own ~/.var/app/<app id>/config/retroarch instead.
+        """
+        path = Path(custom_path)
+        if path.parent.name == 'bin' and path.parent.parent.name == 'exports':
+            return Path.home() / '.var/app' / path.name / 'config/retroarch'
+        folder = path.parent
+        if (folder / 'config/retroarch').exists():
+            folder = folder / 'config/retroarch'
+        return folder
+
     def find_retroarch_config_dir(self):
         """Find RetroArch config directory for the detected installation"""
         # Check for custom path override first
         custom_path = self.settings.get('RetroArch', 'custom_path', '').strip()
         if custom_path and Path(custom_path).exists():
-            custom_config_dir = Path(custom_path).parent
-            if (custom_config_dir / 'config/retroarch').exists():
-                custom_config_dir = custom_config_dir / 'config/retroarch'
+            custom_config_dir = self._custom_install_dir(custom_path)
             if custom_config_dir.exists():
                 print(f"🔧 Using custom config directory: {custom_config_dir}")
                 return custom_config_dir
